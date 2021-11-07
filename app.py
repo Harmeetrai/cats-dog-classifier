@@ -1,86 +1,108 @@
-import os
-from flask import Flask, render_template, request, send_from_directory
-
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras.preprocessing import image
+import streamlit as st
+from PIL import Image
+from tensorflow.keras.preprocessing.image import load_img, img_to_array, save_img
 from tensorflow.keras.models import load_model
+import numpy as np
+import shutil
 
-app = Flask(__name__)
+import os # inbuilt module
+import random # inbuilt module
+import webbrowser # inbuilt module
 
-STATIC_FOLDER = 'static'
-# Path to the folder where we'll store the upload before prediction
-UPLOAD_FOLDER = STATIC_FOLDER + '/uploads'
-# Path to the folder where we store the different models
-MODEL_FOLDER = STATIC_FOLDER + '/models'
+#=================================== Title ===============================
+st.title("""
+Cat 🐱 Or Dog 🐶 Recognizer
+	""")
 
+#================================= Title Image ===========================
+st.text("""""")
+img_path_list = ["static/img/cat_dog.jpg"]
+image = Image.open(img_path_list[0])
+st.image(
+	        image,
+	        use_column_width=True,
+	    )
 
-def load__model():
-    """Load model once at running time for all the predictions"""
-    print('[INFO] : Model loading ................')
-    global model
-    model = tf.keras.models.load_model(MODEL_FOLDER + '/model.h5')
-    global graph
-    graph = tf.get_default_graph()
-    print('[INFO] : Model loaded')
+#================================= About =================================
+st.write("""
+##  About
+	""")
+st.write("""
+Welcome to this project. It is a Cat Or Dog Recognizer App!
+	""")
+st.write("""
+You have to upload your own test images to test it!
+	""")
 
+#========================== File Uploader ===================================
+img_file_buffer = st.file_uploader("Upload an image here 👇🏻")
 
-def predict(fullpath):
-    data = image.load_img(fullpath, target_size=(128, 128, 3))
-    # (224,224,3) ==> (128, 128, 3) - used a self trained model, not the mobilenet.
-    data = np.expand_dims(data, axis=0)
-    # Scaling
-    data = data.astype('float') / 255
+try:
+	image = Image.open(img_file_buffer)
+	img_array = np.array(image)
+	st.write("""
+		Preview 👀 Of Given Image!
+		""")
+	if image is not None:
+	    st.image(
+	        image,
+	        use_column_width=True
+	    )
+	st.write("""
+		**Click The '👉🏼 Predict' Button To See The Prediction Corresponding To This Image! **
+		""")
+except:
+	st.write("""
+		### N0 Picture hasn't selected yet!
+		""")
 
-    # Prediction
+#================================= Predict Button ============================
+st.text("""""")
+submit = st.button("👉🏼 Predict")
 
-    with graph.as_default():
-        result = model.predict(data)
+#==================================== Model ==================================
+def processing(testing_image_path):
+    IMG_SIZE = 50
+    img = load_img(testing_image_path, 
+                   target_size=(224, 224))
+    img_array = img_to_array(img)
+    expanded_img_array = np.expand_dims(img_array, axis=0)
+    preprocessed_img = expanded_img_array / 255.  # Preprocess the image
+    prediction = loaded_model.predict(preprocessed_img)
+    return prediction
 
-    return result
+def generate_result(prediction):
+    
+	st.write("""
+	## 🎯 RESULT
+		""")
+	if prediction[0][0]>0.5:
+	    st.write("""
+	    	## Model predicts it as an image of a CAT 🐱!!!
+	    	""")
+	else:
+	    st.write("""
+	    	## Model predicts it as an image of a DOG 🐶!!!
+	    	""")
 
+#=========================== Predict Button Clicked ==========================
+if submit:
 
-# Home Page
-@app.route('/')
-def index():
-    return render_template('index.html')
+    # save image on that directory
+    save_img("static/uploads/test_image.png", img_array)
 
+    image_path = "static/uploads/test_image.png"
+    # Predicting
+    st.write("👁️ Predicting...")
 
-# Process file and predict his label
-@app.route('/upload', methods=['GET', 'POST'])
-def upload_file():
-    if request.method == 'GET':
-        return render_template('index.html')
-    else:
-        file = request.files['image']
-        fullname = os.path.join(UPLOAD_FOLDER, file.filename)
-        file.save(fullname)
+    loaded_model = load_model("static/models/model.h5")
 
-        result = predict(fullname)
+    prediction = processing(image_path)
 
-        pred_prob = result.item()
+    cat_value = prediction[0][0] * 100
+    dog_value = prediction[0][1] * 100
 
-        if pred_prob > .5:
-            label = 'Dog'
-            accuracy = round(pred_prob * 100, 2)
-        else:
-            label = 'Cat'
-            accuracy = round((1 - pred_prob) * 100, 2)
+    generate_result(prediction)
 
-        return render_template('predict.html', image_file_name=file.filename, label=label, accuracy=accuracy)
-
-
-@app.route('/upload/<filename>')
-def send_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
-
-
-def create_app():
-    load__model()
-    return app
-
-
-if __name__ == '__main__':
-    app = create_app()
-    app.run(debug=True)
-
+    st.write("Chance of Cat: ", cat_value, " %")
+    st.write("Chance of Dog: ", dog_value, " %")
